@@ -1,7 +1,7 @@
 # Small, fast base
 FROM python:3.11-slim
 
-# Avoid interactive prompts during installs
+# Avoid interactive prompts & keep images small
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -12,22 +12,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Workdir inside container
+# Install Python dependencies
 WORKDIR /app
-
-# Copy only dependency file first for better caching
 COPY requirements.txt /app/requirements.txt
-
-# Install Python deps
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Create a working folder that we'll mount onto
+# Create a writable workspace we will mount to
 RUN mkdir -p /work
 
-# Expose Jupyter's port
+# Create a non-root user and hand over ownership of /app and /work
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app /work
+
+# Switch to non-root and start in /work by default
+USER appuser
+WORKDIR /work
+
+# Document the port (publish at runtime with -p)
 EXPOSE 8888
 
-# Default command: launch Jupyter Lab bound to all interfaces
-# (We’ll see the token in logs; you can set a password later if you want.)
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.allow_origin='*'", "--NotebookApp.disable_check_xsrf=True", "--NotebookApp.token="]
+# Start JupyterLab with modern ServerApp flags; token enabled by default (safer)
+CMD ["jupyter", "lab","--ServerApp.ip=0.0.0.0","--ServerApp.port=8888","--ServerApp.open_browser=False"]
